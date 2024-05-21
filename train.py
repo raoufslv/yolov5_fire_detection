@@ -143,7 +143,7 @@ def train(hyp, opt, device, callbacks):
 
     # Loggers
     data_dict = None
-    if RANK in {-1, 0}:
+    if RANK in {-1, 0}: # RANK = -1 means single GPU training, RANK = 0 means first GPU in DDP training
         include_loggers = list(LOGGERS)
         if getattr(opt, "ndjson_console", False):
             include_loggers.append("ndjson_console")
@@ -194,7 +194,7 @@ def train(hyp, opt, device, callbacks):
         LOGGER.info(f"Transferred {len(csd)}/{len(model.state_dict())} items from {weights}")  # report
     else:
         model = Model(cfg, ch=3, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
-    amp = check_amp(model)  # check AMP
+    amp = check_amp(model)  # check AMP, AMP is Automatic Mixed Precision, a feature of PyTorch
 
     # Freeze
     freeze = [f"model.{x}." for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # layers to freeze
@@ -319,7 +319,7 @@ def train(hyp, opt, device, callbacks):
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     last_opt_step = -1
     maps = np.zeros(nc)  # mAP per class
-    results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+    results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.3, mAP@.3-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     stopper, stop = EarlyStopping(patience=opt.patience), False
@@ -438,7 +438,7 @@ def train(hyp, opt, device, callbacks):
                 )
 
             # Update best mAP
-            fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
+            fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.3, mAP@.3-.95]
             stop = stopper(epoch=epoch, fitness=fi)  # early stop check
             if fi > best_fitness:
                 best_fitness = fi
@@ -603,7 +603,7 @@ def main(opt, callbacks=Callbacks()):
             opt.name = Path(opt.cfg).stem  # use model.yaml as name
         opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))
 
-    # DDP mode
+    # DDP mode, DDP means DistributedDataParallel
     device = select_device(opt.device, batch_size=opt.batch_size)
     if LOCAL_RANK != -1:
         msg = "is not compatible with YOLOv5 Multi-GPU DDP training"

@@ -182,7 +182,7 @@ def run(
     cuda = device.type != "cpu"
     is_coco = isinstance(data.get("val"), str) and data["val"].endswith(f"coco{os.sep}val2017.txt")  # COCO dataset
     nc = 1 if single_cls else int(data["nc"])  # number of classes
-    iouv = torch.linspace(0.5, 0.95, 10, device=device)  # iou vector for mAP@0.5:0.95
+    iouv = torch.linspace(0.3, 0.95, 10, device=device)  # iou vector for mAP@0.3:0.95
     niou = iouv.numel()
 
     # Dataloader
@@ -214,8 +214,8 @@ def run(
     if isinstance(names, (list, tuple)):  # old format
         names = dict(enumerate(names))
     class_map = coco80_to_coco91_class() if is_coco else list(range(1000))
-    s = ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "P", "R", "mAP50", "mAP50-95")
-    tp, fp, p, r, f1, mp, mr, map50, ap50, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    s = ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "P", "R", "mAP30", "m30-95")
+    tp, fp, p, r, f1, mp, mr, map30, ap30, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     dt = Profile(device=device), Profile(device=device), Profile(device=device)  # profiling times
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
@@ -297,20 +297,20 @@ def run(
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
         tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plots, save_dir=save_dir, names=names)
-        ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        ap30, ap = ap[:, 0], ap.mean(1)  # AP@0.3, AP@0.3:0.95
+        mp, mr, map30, map = p.mean(), r.mean(), ap30.mean(), ap.mean()
     nt = np.bincount(stats[3].astype(int), minlength=nc)  # number of targets per class
 
     # Print results
     pf = "%22s" + "%11i" * 2 + "%11.3g" * 4  # print format
-    LOGGER.info(pf % ("all", seen, nt.sum(), mp, mr, map50, map))
+    LOGGER.info(pf % ("all", seen, nt.sum(), mp, mr, map30, map))
     if nt.sum() == 0:
         LOGGER.warning(f"WARNING ⚠️ no labels found in {task} set, can not compute metrics without labels")
 
     # Print results per class
-    if (verbose or (nc < 50 and not training)) and nc > 1 and len(stats):
+    if (verbose or (nc < 30 and not training)) and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
-            LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+            LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap30[i], ap[i]))
 
     # Print speeds
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
@@ -321,7 +321,7 @@ def run(
     # Plots
     if plots:
         confusion_matrix.plot(save_dir=save_dir, names=list(names.values()))
-        callbacks.run("on_val_end", nt, tp, fp, p, r, f1, ap, ap50, ap_class, confusion_matrix)
+        callbacks.run("on_val_end", nt, tp, fp, p, r, f1, ap, ap30, ap_class, confusion_matrix)
 
     # Save JSON
     if save_json and len(jdict):
@@ -347,7 +347,7 @@ def run(
             eval.evaluate()
             eval.accumulate()
             eval.summarize()
-            map, map50 = eval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
+            map, map30 = eval.stats[:2]  # update results (mAP@0.3:0.95, mAP@0.3)
         except Exception as e:
             LOGGER.info(f"pycocotools unable to run: {e}")
 
@@ -359,7 +359,7 @@ def run(
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp, mr, map30, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
 
 
 def parse_opt():
