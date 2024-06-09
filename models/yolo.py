@@ -44,6 +44,7 @@ from models.common import (
     Proto,
     Involution,
     CBAM,
+    SEBlock,
 )
 import argparse
 import contextlib
@@ -444,7 +445,7 @@ def parse_model(d, ch):
             C3Ghost,
             nn.ConvTranspose2d,
             DWConvTranspose2d,
-            C3x, CBAM, Involution
+            C3x, CBAM, Involution, SEBlock,
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
